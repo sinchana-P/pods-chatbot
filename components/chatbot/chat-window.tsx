@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-
 import { useState, useEffect, useRef } from "react";
 import { X, Send } from "lucide-react";
 import Image from "next/image";
@@ -17,45 +16,19 @@ type Message = {
 export function ChatWindow({ onClose }: { onClose: () => void }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [sessionId, setSessionId] = useState("");
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    // Generate a session ID when the component mounts
-    setSessionId(uuidv4());
+  const hasStarted = useRef(false);
 
-    // Add initial bot message
-    setMessages([
-      {
-        id: uuidv4(),
-        content:
-          "Hi there! Welcome to PODS assistance. How can I assist you today? Please choose from the following options:\n\n1. Request a new Quote\n2. Existing Order Assistance\n3. Place Order with an Existing Quote\n\nLet me know how I can help!",
-        sender: "bot",
-        timestamp: new Date(),
-      },
-    ]);
-  }, []);
+  console.group(messages)
 
   useEffect(() => {
-    // Scroll to bottom whenever messages change
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!input.trim()) return;
-
-    const userMessage: Message = {
-      id: uuidv4(),
-      content: input,
-      sender: "user",
-      timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
+  const initiateChat = async (msg: string, session: string | null) => {
     setIsLoading(true);
 
     try {
@@ -72,8 +45,8 @@ export function ChatWindow({ onClose }: { onClose: () => void }) {
             Referer: "https://schema-registry-dev.azurewebsites.net/",
           },
           body: JSON.stringify({
-            message: input,
-            session_id: sessionId,
+            message: msg,
+            session_id: session,
           }),
         }
       );
@@ -94,8 +67,9 @@ export function ChatWindow({ onClose }: { onClose: () => void }) {
       };
 
       setMessages((prev) => [...prev, botMessage]);
+      setSessionId(data.session_id);
     } catch (error) {
-      console.error("Error sending message:", error);
+      console.error("Error during chat initiation:", error);
 
       const errorMessage: Message = {
         id: uuidv4(),
@@ -106,10 +80,38 @@ export function ChatWindow({ onClose }: { onClose: () => void }) {
       };
 
       setMessages((prev) => [...prev, errorMessage]);
+      setSessionId(null);
     } finally {
       setIsLoading(false);
     }
   };
+
+  const sendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!input.trim()) return;
+
+    const userMessage: Message = {
+      id: uuidv4(),
+      content: input,
+      sender: "user",
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    const currentInput = input;
+    setInput("");
+
+    await initiateChat(currentInput, sessionId);
+  };
+
+  // Initial Chat
+  useEffect(() => {
+    if (!hasStarted.current) {
+      initiateChat("", null);
+      hasStarted.current = true;
+    }
+  }, []);
 
   return (
     <div className="fixed bottom-5 right-6 w-[23.5rem] h-[400px] bg-white rounded-lg shadow-xl z-50 flex flex-col border border-gray-200">

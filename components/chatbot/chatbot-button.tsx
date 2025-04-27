@@ -11,10 +11,11 @@ export function ChatbotButton() {
     <>
       {!isOpen && <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 bg-blue-600 text-white p-3 rounded-full shadow-lg hover:bg-blue-700 transition-all z-50"
+        className="fixed bottom-6 right-6 text-white p-3 transition-all z-50"
         aria-label="Open chat"
       >
-        <MessageCircle size={24} />
+        {/* <MessageCircle size={24} /> */}
+        <img src="../images/chatBotLogo.jpeg" alt="Chat Icon" className="w-10 h-10" />
       </button>}
 
       {isOpen && <ChatWindow onClose={() => setIsOpen(false)} />}
