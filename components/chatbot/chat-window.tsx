@@ -17,18 +17,36 @@ export function ChatWindow({ onClose }: { onClose: () => void }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [userData, setUserData] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const hasStarted = useRef(false);
 
-  console.group(messages)
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const initiateChat = async (msg: string, session: string | null) => {
+  // Load session data from sessionStorage on component mount
+  useEffect(() => {
+    const storedSessionId = sessionStorage.getItem('session_id');
+    const storedUserData = sessionStorage.getItem('user_data');
+    
+    if (storedSessionId) {
+      setSessionId(storedSessionId);
+    }
+    
+    if (storedUserData) {
+      try {
+        setUserData(JSON.parse(storedUserData));
+      } catch (error) {
+        console.error("Error parsing stored user data:", error);
+        sessionStorage.removeItem('user_data');
+      }
+    }
+  }, []);
+
+  const initiateChat = async (msg: string, session: string | null, currentUserData: any | null) => {
     setIsLoading(true);
 
     try {
@@ -47,6 +65,7 @@ export function ChatWindow({ onClose }: { onClose: () => void }) {
           body: JSON.stringify({
             message: msg,
             session_id: session,
+            user_data: currentUserData
           }),
         }
       );
@@ -56,18 +75,39 @@ export function ChatWindow({ onClose }: { onClose: () => void }) {
       }
 
       const data = await response.json();
+      
+      // Handle user data from response
+      if (data.user_data) {
+        // Save the new user data in state
+        setUserData(data.user_data);
+        // Save to sessionStorage
+        sessionStorage.setItem('user_data', JSON.stringify(data.user_data));
+      }
+      
+      // Save the session ID
+      if (data.session_id) {
+        setSessionId(data.session_id);
+        sessionStorage.setItem('session_id', data.session_id);
+      }
+
+      function parseMarkdown(text:string) {
+        text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+        text = text.replace(/`(.*?)`/g, '<code>$1');
+        text = text.replace(/_(.*?)_/g, '<u>$1</u>');
+        return text;
+    }
 
       const botMessage: Message = {
         id: uuidv4(),
         content:
-          data.message ||
+        parseMarkdown(data.message) ||
           "I received your message. How can I help you further?",
         sender: "bot",
         timestamp: new Date(),
       };
 
       setMessages((prev) => [...prev, botMessage]);
-      setSessionId(data.session_id);
     } catch (error) {
       console.error("Error during chat initiation:", error);
 
@@ -80,7 +120,6 @@ export function ChatWindow({ onClose }: { onClose: () => void }) {
       };
 
       setMessages((prev) => [...prev, errorMessage]);
-      setSessionId(null);
     } finally {
       setIsLoading(false);
     }
@@ -102,13 +141,14 @@ export function ChatWindow({ onClose }: { onClose: () => void }) {
     const currentInput = input;
     setInput("");
 
-    await initiateChat(currentInput, sessionId);
+    // Pass the current userData from state
+    await initiateChat(currentInput, sessionId, userData);
   };
 
   // Initial Chat
   useEffect(() => {
     if (!hasStarted.current) {
-      initiateChat("", null);
+      initiateChat("Hi", sessionId, userData);
       hasStarted.current = true;
     }
   }, []);
